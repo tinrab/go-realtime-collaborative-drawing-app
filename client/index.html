@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>Draw</title>
+</head>
+
+<body>
+  <button id="test-button">Test</button>
+
+  <script>
+    window.onload = function () {
+      var socket = new WebSocket("ws://localhost:3000/ws");
+      socket.onclose = function (event) {
+        console.log('Connection closed');
+      };
+      socket.onmessage = function (event) {
+        var messages = event.data.split('\n');
+        for (var i = 0; i < messages.length; i++) {
+          var message = messages[i];
+          console.log(message);
+        }
+      };
+      document.getElementById("test-button").onclick = function() {
+        socket.send("hello?");
+      };
+    };
+  </script>
+  </body>
+
+</html>
