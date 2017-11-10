@@ -3,17 +3,95 @@
 
 <head>
   <title>Draw</title>
+  <style>
+    #canvas {
+      border: 1px solid #000;
+    }
+  </style>
 </head>
 
 <body>
-  <button id="test-button">Test</button>
-
+  <canvas id="canvas"
+          width="480"
+          height="360"></canvas>
+  <div>
+    <button id="clearButton">Clear</button>
+  </div>
   <script>
+    MIN_POINT_DISTANCE = 5;
+
+    function Point(x, y) {
+      this.x = x;
+      this.y = y;
+    }
+
+    Point.prototype.distanceTo = function(other) {
+      var dx = this.x - other.x;
+      var dy = this.y - other.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
     window.onload = function () {
       var socket = new WebSocket("ws://localhost:3000/ws");
+      var canvas = document.getElementById('canvas');
+      var ctx = canvas.getContext("2d");
+      var isDrawing = false;
+      var strokeColor = '#37f';
+      var strokes = [];
+
+      canvas.onmousedown = function (event) {
+        isDrawing = true;
+        strokes.push([new Point(event.pageX - this.offsetLeft, event.pageY - this.offsetTop)]);
+        update();
+      };
+
+      canvas.onmousemove = function (event) {
+        if (isDrawing) {
+          var stroke = strokes[strokes.length - 1];
+          var p = new Point(event.pageX - this.offsetLeft, event.pageY - this.offsetTop);
+          if (p.distanceTo(stroke[stroke.length - 1]) > MIN_POINT_DISTANCE) {
+            stroke.push(p);
+            update();
+          }
+        }
+      };
+
+      canvas.onmouseup = function () {
+        isDrawing = false;
+      };
+
+      canvas.onmouseleave = function () {
+        isDrawing = false;
+      };
+
+      function update() {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 4;
+        // Draw local stroke
+        ctx.strokeStyle = strokeColor;
+        for (var i = 0; i < strokes.length; i++) {
+          ctx.beginPath();
+          for (var j = 1; j < strokes[i].length; j++) {
+            var prev = strokes[i][j - 1];
+            var current = strokes[i][j];
+            ctx.moveTo(prev.x, prev.y);
+            ctx.lineTo(current.x, current.y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+      }
+
+      document.getElementById('clearButton').onclick = function () {
+        strokes = [];
+        update();
+      };
+
       socket.onclose = function (event) {
         console.log('Connection closed');
       };
+
       socket.onmessage = function (event) {
         var messages = event.data.split('\n');
         for (var i = 0; i < messages.length; i++) {
@@ -21,11 +99,7 @@
           console.log(message);
         }
       };
-      document.getElementById("test-button").onclick = function() {
-        socket.send("hello?");
-      };
     };
-  </script>
-  </body>
+  </script> </body>
 
 </html>
