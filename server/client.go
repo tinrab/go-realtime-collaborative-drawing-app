@@ -4,6 +4,8 @@ import "github.com/gorilla/websocket"
 
 type Client struct {
 	hub      *Hub
+	id       int
+	color    string
 	socket   *websocket.Conn
 	outbound chan []byte
 }
@@ -23,7 +25,6 @@ func (client *Client) read() {
 	for {
 		_, data, err := client.socket.ReadMessage()
 		if err != nil {
-			client.hub.unregister <- client
 			break
 		}
 		client.hub.onMessage(data, client)
@@ -43,7 +44,7 @@ func (client *Client) write() {
 	}
 }
 
-func (client *Client) close() {
+func (client Client) close() {
 	client.socket.Close()
 	close(client.outbound)
 }

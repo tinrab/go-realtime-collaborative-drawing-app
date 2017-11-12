@@ -18,17 +18,14 @@
     <button id="clearButton">Clear</button>
   </div>
   <script>
-    MIN_POINT_DISTANCE = 5;
+    MESSAGE_CONNECTED = 1;
+    MESSAGE_USER_JOINED = 2;
+    MESSAGE_USER_LEFT = 3;
+    MESSAGE_STROKE = 4;
 
     function Point(x, y) {
       this.x = x;
       this.y = y;
-    }
-
-    Point.prototype.distanceTo = function(other) {
-      var dx = this.x - other.x;
-      var dy = this.y - other.y;
-      return Math.sqrt(dx * dx + dy * dy);
     }
 
     window.onload = function () {
@@ -36,23 +33,65 @@
       var canvas = document.getElementById('canvas');
       var ctx = canvas.getContext("2d");
       var isDrawing = false;
-      var strokeColor = '#37f';
+      var strokeColor = '';
       var strokes = [];
+      var otherColors = {};
+      var otherStrokes = {};
+
+      socket.onclose = function (event) {
+        console.log('Connection closed');
+      };
+
+      socket.onmessage = function (event) {
+        var messages = event.data.split('\n');
+        for (var i = 0; i < messages.length; i++) {
+          var message = JSON.parse(messages[i]);
+          onMessage(message);
+        }
+      };
+
+      function onMessage(message) {
+        switch (message.kind) {
+          case MESSAGE_CONNECTED:
+            strokeColor = message.color;
+            console.log(message);
+
+            for (var i = 0; i < message.users.length; i++) {
+              var user = message.users[i];
+              otherColors[user.id] = user.color;
+              otherStrokes[user.id] = [];
+            }
+            break;
+          case MESSAGE_USER_JOINED:
+            otherColors[message.user.id] = message.user.color;
+            otherStrokes[message.user.id] = [];
+            break;
+          case MESSAGE_USER_LEFT:
+            delete otherColors[message.userId];
+            delete otherStrokes[message.userId];
+            break;
+          case MESSAGE_STROKE:
+            if (message.finish) {
+              //strokes.push([p]);
+              otherStrokes[message.userId].push(message.points);
+            } else {
+              //strokes[strokes.length - 1].push(p);
+              var strokes = otherStrokes[message.userId];
+              strokes[strokes.length - 1] = strokes[strokes.length - 1].concat(message.points);
+            }
+            update();
+            break;
+        }
+      }
 
       canvas.onmousedown = function (event) {
         isDrawing = true;
-        strokes.push([new Point(event.pageX - this.offsetLeft, event.pageY - this.offsetTop)]);
-        update();
+        addPoint(event.pageX - this.offsetLeft, event.pageY - this.offsetTop, true);
       };
 
       canvas.onmousemove = function (event) {
         if (isDrawing) {
-          var stroke = strokes[strokes.length - 1];
-          var p = new Point(event.pageX - this.offsetLeft, event.pageY - this.offsetTop);
-          if (p.distanceTo(stroke[stroke.length - 1]) > MIN_POINT_DISTANCE) {
-            stroke.push(p);
-            update();
-          }
+          addPoint(event.pageX - this.offsetLeft, event.pageY - this.offsetTop);
         }
       };
 
@@ -64,12 +103,36 @@
         isDrawing = false;
       };
 
+      function addPoint(x, y, newStroke) {
+        var p = new Point(x, y);
+        if (newStroke) {
+          strokes.push([p]);
+        } else {
+          strokes[strokes.length - 1].push(p);
+        }
+        socket.send(JSON.stringify({ kind: MESSAGE_STROKE, points: [p], finish: newStroke }));
+        update();
+      }
+
       function update() {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         ctx.lineJoin = 'round';
         ctx.lineWidth = 4;
-        // Draw local stroke
+
+        // Draw me
         ctx.strokeStyle = strokeColor;
+        drawStrokes(strokes);
+
+        // Draw others
+        var userIds = Object.keys(otherColors);
+        for (var i = 0; i< userIds.length; i++) {
+          var userId = userIds[i];
+          ctx.strokeStyle = otherColors[userId];
+          drawStrokes(otherStrokes[userId]);
+        }
+      }
+
+      function drawStrokes(strokes) {
         for (var i = 0; i < strokes.length; i++) {
           ctx.beginPath();
           for (var j = 1; j < strokes[i].length; j++) {
@@ -84,20 +147,7 @@
       }
 
       document.getElementById('clearButton').onclick = function () {
-        strokes = [];
-        update();
-      };
-
-      socket.onclose = function (event) {
-        console.log('Connection closed');
-      };
-
-      socket.onmessage = function (event) {
-        var messages = event.data.split('\n');
-        for (var i = 0; i < messages.length; i++) {
-          var message = messages[i];
-          console.log(message);
-        }
+        // TODO
       };
     };
   </script> </body>

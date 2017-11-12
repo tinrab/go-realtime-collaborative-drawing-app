@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
+	"github.com/tidwall/gjson"
+	"github.com/tinrab/cautious-guacamole/server/message"
 )
 
 var upgrader = websocket.Upgrader{
@@ -12,14 +15,16 @@ var upgrader = websocket.Upgrader{
 }
 
 type Hub struct {
-	clients    map[*Client]bool
+	clients    []*Client
+	nextID     int
 	register   chan *Client
 	unregister chan *Client
 }
 
 func newHub() *Hub {
 	return &Hub{
-		clients:    make(map[*Client]bool),
+		clients:    make([]*Client, 0),
+		nextID:     0,
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
@@ -31,36 +36,23 @@ func (hub *Hub) run() {
 		case client := <-hub.register:
 			hub.onConnect(client)
 		case client := <-hub.unregister:
-			if _, ok := hub.clients[client]; ok {
-				hub.onDisconnect(client)
-			}
+			hub.onDisconnect(client)
 		}
 	}
 }
 
-func (hub Hub) send(data []byte, ignore *Client) {
-	for client := range hub.clients {
-		if client != ignore {
-			client.outbound <- data
+func (hub *Hub) broadcast(message interface{}, ignore *Client) {
+	data, _ := json.Marshal(message)
+	for _, c := range hub.clients {
+		if c != ignore {
+			c.outbound <- data
 		}
 	}
 }
 
-func (hub *Hub) onConnect(client *Client) {
-	hub.clients[client] = true
-	log.Println("client connected: ", client.socket.RemoteAddr())
-}
-
-func (hub *Hub) onDisconnect(client *Client) {
-	client.close()
-	delete(hub.clients, client)
-
-	log.Println("client disconnected: ", client.socket.RemoteAddr())
-}
-
-func (hub *Hub) onMessage(data []byte, client *Client) {
-	log.Println("onMessage: ", string(data))
-	hub.send(data, client)
+func (hub *Hub) send(message interface{}, client *Client) {
+	data, _ := json.Marshal(message)
+	client.outbound <- data
 }
 
 func (hub *Hub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -75,4 +67,59 @@ func (hub *Hub) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	go client.read()
 	go client.write()
+}
+
+func (hub *Hub) onConnect(client *Client) {
+	log.Println("client connected: ", client.socket.RemoteAddr())
+
+	// Make new client
+	client.id = hub.nextID
+	hub.nextID++
+	client.color = generateColor()
+	hub.clients = append(hub.clients, client)
+
+	// Make list of all users
+	users := []message.User{}
+	for _, c := range hub.clients {
+		users = append(users, message.User{ID: c.id, Color: c.color})
+	}
+
+	// Notify that a user joined
+	hub.send(message.NewConnected(client.color, users), client)
+	hub.broadcast(message.NewUserJoined(client.id, client.color), client)
+}
+
+func (hub *Hub) onDisconnect(client *Client) {
+	log.Println("client disconnected: ", client.socket.RemoteAddr())
+
+	client.close()
+
+	// Find index of client
+	i := -1
+	for j, c := range hub.clients {
+		if c.id == client.id {
+			i = j
+			break
+		}
+	}
+	// Delete client from list
+	copy(hub.clients[i:], hub.clients[i+1:])
+	hub.clients[len(hub.clients)-1] = nil
+	hub.clients = hub.clients[:len(hub.clients)-1]
+
+	hub.broadcast(message.NewUserLeft(client.id), nil)
+}
+
+func (hub *Hub) onMessage(data []byte, client *Client) {
+	log.Println("onMessage: ", string(data))
+
+	kind := gjson.GetBytes(data, "kind").Int()
+	if kind == message.KindStroke {
+		var msg message.Stroke
+		if json.Unmarshal(data, &msg) != nil {
+			return
+		}
+		msg.UserID = client.id
+		hub.broadcast(msg, client)
+	}
 }
