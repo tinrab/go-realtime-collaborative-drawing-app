@@ -5,6 +5,7 @@ const (
 	KindUserJoined
 	KindUserLeft
 	KindStroke
+	KindClear
 )
 
 type Point struct {
@@ -60,4 +61,9 @@ type Stroke struct {
 	UserID int     `json:"userId"`
 	Points []Point `json:"points"`
 	Finish bool    `json:"finish"`
+}
+
+type Clear struct {
+	Kind   int `json:"kind"`
+	UserID int `json:"userId"`
 }

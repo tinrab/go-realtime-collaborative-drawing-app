@@ -121,5 +121,12 @@ func (hub *Hub) onMessage(data []byte, client *Client) {
 		}
 		msg.UserID = client.id
 		hub.broadcast(msg, client)
+	} else if kind == message.KindClear {
+		var msg message.Clear
+		if json.Unmarshal(data, &msg) != nil {
+			return
+		}
+		msg.UserID = client.id
+		hub.broadcast(msg, client)
 	}
 }

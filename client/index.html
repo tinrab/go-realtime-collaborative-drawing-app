@@ -22,6 +22,7 @@
     MESSAGE_USER_JOINED = 2;
     MESSAGE_USER_LEFT = 3;
     MESSAGE_STROKE = 4;
+    MESSAGE_CLEAR = 5;
 
     function Point(x, y) {
       this.x = x;
@@ -54,8 +55,6 @@
         switch (message.kind) {
           case MESSAGE_CONNECTED:
             strokeColor = message.color;
-            console.log(message);
-
             for (var i = 0; i < message.users.length; i++) {
               var user = message.users[i];
               otherColors[user.id] = user.color;
@@ -69,6 +68,7 @@
           case MESSAGE_USER_LEFT:
             delete otherColors[message.userId];
             delete otherStrokes[message.userId];
+            update();
             break;
           case MESSAGE_STROKE:
             if (message.finish) {
@@ -79,6 +79,10 @@
               var strokes = otherStrokes[message.userId];
               strokes[strokes.length - 1] = strokes[strokes.length - 1].concat(message.points);
             }
+            update();
+            break;
+          case MESSAGE_CLEAR:
+            otherStrokes[message.userId] = [];
             update();
             break;
         }
@@ -147,7 +151,9 @@
       }
 
       document.getElementById('clearButton').onclick = function () {
-        // TODO
+        strokes = [];
+        socket.send(JSON.stringify({kind: MESSAGE_CLEAR}));
+        update();
       };
     };
   </script> </body>
