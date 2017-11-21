@@ -7,7 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/tidwall/gjson"
-	"github.com/tinrab/cautious-guacamole/server/message"
+	"github.com/tinrab/go-realtime-collaborative-drawing-app/message"
 )
 
 var upgrader = websocket.Upgrader{

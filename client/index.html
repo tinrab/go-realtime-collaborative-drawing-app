@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
   <title>Draw</title>
@@ -13,7 +13,8 @@
 <body>
   <canvas id="canvas"
           width="480"
-          height="360"></canvas>
+          height="360">
+  </canvas>
   <div>
     <button id="clearButton">Clear</button>
   </div>
@@ -24,24 +25,15 @@
     MESSAGE_STROKE = 4;
     MESSAGE_CLEAR = 5;
 
-    function Point(x, y) {
-      this.x = x;
-      this.y = y;
-    }
-
     window.onload = function () {
-      var socket = new WebSocket("ws://localhost:3000/ws");
       var canvas = document.getElementById('canvas');
       var ctx = canvas.getContext("2d");
       var isDrawing = false;
       var strokeColor = '';
       var strokes = [];
+      var socket = new WebSocket("ws://localhost:3000/ws");
       var otherColors = {};
       var otherStrokes = {};
-
-      socket.onclose = function (event) {
-        console.log('Connection closed');
-      };
 
       socket.onmessage = function (event) {
         var messages = event.data.split('\n');
@@ -72,10 +64,8 @@
             break;
           case MESSAGE_STROKE:
             if (message.finish) {
-              //strokes.push([p]);
               otherStrokes[message.userId].push(message.points);
             } else {
-              //strokes[strokes.length - 1].push(p);
               var strokes = otherStrokes[message.userId];
               strokes[strokes.length - 1] = strokes[strokes.length - 1].concat(message.points);
             }
@@ -108,7 +98,7 @@
       };
 
       function addPoint(x, y, newStroke) {
-        var p = new Point(x, y);
+        var p = { x: x, y: y };
         if (newStroke) {
           strokes.push([p]);
         } else {
@@ -129,7 +119,7 @@
 
         // Draw others
         var userIds = Object.keys(otherColors);
-        for (var i = 0; i< userIds.length; i++) {
+        for (var i = 0; i < userIds.length; i++) {
           var userId = userIds[i];
           ctx.strokeStyle = otherColors[userId];
           drawStrokes(otherStrokes[userId]);
@@ -152,10 +142,11 @@
 
       document.getElementById('clearButton').onclick = function () {
         strokes = [];
-        socket.send(JSON.stringify({kind: MESSAGE_CLEAR}));
+        socket.send(JSON.stringify({ kind: MESSAGE_CLEAR }));
         update();
       };
     };
-  </script> </body>
+  </script>
+</body>
 
 </html>
